@@ -90,6 +90,66 @@ impl<BUS> CommonBus<BUS> {
 
 unsafe impl<BUS> Sync for CommonBus<BUS> {}
 
+macro_rules! impl_traits {
+    { $(
+        trait $( $trait_path:ident )::+ $( < $( $trait_param:ident ),* > )? {
+            $( type $assoc_type:ident; )*
+            $( fn $fn:ident ( &mut self $( , $fn_arg:ident: $fn_arg_type:ty )* $(,)? ) $( -> $ret_type:ty )?; )*
+        }
+    )* } => {
+        $(
+        impl <
+                $( $( $trait_param , )* )?
+                BUS: $( $trait_path )::+ $( < $( $trait_param ),* > )?
+            >
+            $( $trait_path )::+ $( < $( $trait_param ),* > )?
+            for &CommonBus<BUS> {
+
+            $(
+                type $assoc_type = BUS:: $assoc_type;
+            )*
+
+            $(
+                fn $fn ( &mut self $( , $fn_arg : $fn_arg_type )* ) $( -> $ret_type )? {
+                    self.lock(|bus| bus.$fn( $( $fn_arg ),* ))
+                }
+            )*
+
+        }
+        )*
+    }
+}
+
+
+impl_traits! {
+    trait i2c::Read {
+        type Error;
+        fn read(&mut self, address: u8, buffer: &mut [u8]) -> Result<(), Self::Error>;
+    }
+
+    trait i2c::Write {
+        type Error;
+        fn write(&mut self, address: u8, buffer: &[u8]) -> Result<(), Self::Error>;
+    }
+
+    trait i2c::WriteRead {
+        type Error;
+
+        fn write_read(
+            &mut self,
+            address: u8,
+            bytes: &[u8],
+            buffer: &mut [u8],
+        ) -> Result<(), Self::Error>;
+    }
+
+    trait blocking::spi::Write<T> {
+        type Error;
+        fn write(&mut self, words: &[T]) -> Result<(), Self::Error>;
+    }
+}
+
+/*
 impl<BUS: i2c::Read> i2c::Read for &CommonBus<BUS> {
     type Error = BUS::Error;
 
@@ -117,7 +177,7 @@ impl<BUS: i2c::WriteRead> i2c::WriteRead for &CommonBus<BUS> {
     ) -> Result<(), Self::Error> {
         self.lock(|bus| bus.write_read(address, bytes, buffer))
     }
-}
+}*/
 
 macro_rules! spi {
     ($($T:ty),*) => {
@@ -153,7 +213,7 @@ macro_rules! spi {
     }
 }
 
-spi!(u8, u16, u32, u64);
+//spi!(u8, u16, u32, u64);
 
 #[cfg(feature = "thumbv6")]
 mod atomic {
